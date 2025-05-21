@@ -1,13 +1,9 @@
-#torch
-#transformers
-#safetensors
-#pandas
-#tqdm
-#scikit-learn
-torch==2.2.2 --extra-index-url https://download.pytorch.org/whl/cpu
-transformers==4.40.1
-safetensors==0.4.2
-pandas==2.2.2
-tqdm==4.66.4
-scikit-learn==1.4.2
-
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch==2.5.1
+transformers==4.47.1
+safetensors==0.5.2
+scikit-learn==1.6.1
+pandas==2.2.3
+numpy==1.26.4
+tqdm==4.67.1
+huggingface_hub==0.30.2

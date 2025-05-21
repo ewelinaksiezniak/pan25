@@ -8,21 +8,18 @@ import pandas as pd
 from tqdm import tqdm
 from sklearn.metrics import f1_score
 
-from transformers import AutoTokenizer
+from transformers import AutoTokenizer, AutoConfig, AutoModel
 from safetensors.torch import load_file
-
 from torch.utils.data import Dataset, DataLoader
-from huggingface_hub import hf_hub_download
-
 import torch.nn as nn
-from transformers import AutoConfig, AutoModel
-
 
 # ===== Model =====
 class ClassificationModel(nn.Module):
     def __init__(self, encoder_path, hidden_size=768):
         super().__init__()
-        config = AutoConfig.from_pretrained("FacebookAI/xlm-roberta-base")
+        # W TIRA modele są montowane lokalnie, używamy lokalnej ścieżki
+        encoder_config_path = f"/model/transformers/FacebookAI/xlm-roberta-base"
+        config = AutoConfig.from_pretrained(encoder_config_path)
         self.encoder = AutoModel.from_config(config)
         self.classifier = nn.Linear(hidden_size, 2)
 
@@ -35,29 +32,18 @@ class ClassificationModel(nn.Module):
         return {"loss": loss, "logits": logits}
 
     def load_weights(self, model_path, device="cpu"):
-        try:
-            if model_path.startswith("Ewel/"):
-                try:
-                    safe_path = hf_hub_download(repo_id=model_path, filename="model.safetensors")
-                    state_dict = load_file(safe_path, device=device)
-                    print(f"Załadowano wagi z Hugging Face (safetensors): {safe_path}")
-                except Exception:
-                    bin_path = hf_hub_download(repo_id=model_path, filename="pytorch_model.bin")
-                    state_dict = torch.load(bin_path, map_location=device)
-                    print(f"Załadowano wagi z Hugging Face (.bin): {bin_path}")
-            else:
-                safe_path = os.path.join(model_path, "model.safetensors")
-                bin_path = os.path.join(model_path, "pytorch_model.bin")
-                if os.path.isfile(safe_path):
-                    state_dict = load_file(safe_path, device=device)
-                    print(f"Załadowano wagi lokalnie (safetensors): {safe_path}")
-                elif os.path.isfile(bin_path):
-                    state_dict = torch.load(bin_path, map_location=device)
-                    print(f"Załadowano wagi lokalnie (.bin): {bin_path}")
-                else:
-                    raise FileNotFoundError(f"Brak plików .safetensors lub .bin w {model_path}")
-        except Exception as e:
-            raise RuntimeError(f"Błąd podczas ładowania wag: {e}")
+        # W TIRA modele są montowane lokalnie, więc używamy ścieżki do zamontowanego modelu
+        safe_path = f"/model/transformers/{model_path}/model.safetensors"
+        bin_path = f"/model/transformers/{model_path}/pytorch_model.bin"
+
+        if os.path.isfile(safe_path):
+            state_dict = load_file(safe_path, device=device)
+            print(f"Załadowano wagi (safetensors): {safe_path}")
+        elif os.path.isfile(bin_path):
+            state_dict = torch.load(bin_path, map_location=device)
+            print(f"Załadowano wagi (.bin): {bin_path}")
+        else:
+            raise FileNotFoundError(f"Brak wag w modelu: {model_path}")
 
         self.encoder.load_state_dict(state_dict, strict=False)
 
@@ -131,7 +117,7 @@ def main(args):
         'hard':   'Ewel/question_freeze_0'
     }
 
-    tokenizer = AutoTokenizer.from_pretrained("FacebookAI/xlm-roberta-base")
+    tokenizer = AutoTokenizer.from_pretrained("/model/transformers/FacebookAI/xlm-roberta-base")
 
     for difficulty in ['easy', 'medium', 'hard']:
         input_dir = os.path.join(args.input, difficulty)
@@ -141,9 +127,9 @@ def main(args):
         files_list = glob.glob(f'{input_dir}/**/*.txt', recursive=True)
         print(f'[{difficulty}] Znaleziono {len(files_list)} plików.')
 
-        model_path = model_map[difficulty]
-        model = ClassificationModel(encoder_path=model_path)
-        model.load_weights(model_path, device=args.device)
+        model_key = model_map[difficulty]
+        model = ClassificationModel(encoder_path=model_key)
+        model.load_weights(model_key, device=args.device)
         model.to(args.device)
 
         for file_path in tqdm(files_list):
